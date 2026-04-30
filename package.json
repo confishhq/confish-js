@@ -1,0 +1,68 @@
+{
+  "name": "@confish/sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript/JavaScript SDK for confish — typed configuration, actions, and webhooks.",
+  "license": "MIT",
+  "author": "confish",
+  "homepage": "https://confi.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/confishhq/confish-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/confishhq/confish-js/issues"
+  },
+  "keywords": [
+    "confish",
+    "configuration",
+    "config",
+    "feature-flags",
+    "sdk",
+    "typescript"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./webhook": {
+      "types": "./dist/webhook.d.ts",
+      "import": "./dist/webhook.js",
+      "require": "./dist/webhook.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.9",
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "packageManager": "pnpm@9.15.0"
+}

@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # required for npm provenance
+  id-token: write # required for OIDC trusted publishing
 
 jobs:
   publish:
@@ -24,6 +24,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm build
-      - run: pnpm publish --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # OIDC trusted publishing requires npm CLI 11.5+ (Node 20 ships with npm 10).
+      - run: npm install -g npm@latest
+      - run: npm publish --access public --provenance

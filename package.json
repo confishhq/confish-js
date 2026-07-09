@@ -51,7 +51,7 @@
     "prepublishOnly": "pnpm build"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.9",

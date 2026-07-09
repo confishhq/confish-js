@@ -3,7 +3,7 @@
 Official TypeScript/JavaScript SDK for [confish](https://confi.sh) — typed configuration, actions, feeds, and webhook verification.
 
 - Fully typed configuration via a generic parameter
-- Native `fetch`, no dependencies, works in Node 18+, Bun, Deno, Cloudflare Workers, Vercel Edge
+- Native `fetch`, no dependencies, works in Node 20+, Bun, Deno, Cloudflare Workers, Vercel Edge
 - Long-running action consumer with abort signal and idempotent skip on conflict
 - Typed feeds for pushing live items with optional TTLs
 - Webhook signature verification using Web Crypto

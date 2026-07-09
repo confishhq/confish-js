@@ -18,6 +18,9 @@
 
 ### Breaking changes
 
+- **Node 20+ required** (was 18+). Webhook verification uses the
+  global WebCrypto API, which Node 18 never exposed - `verifyWebhook`
+  was broken there since 0.1.0. Node 18 is EOL.
 - **Config namespace.** `client.fetch()`, `client.update()`, and
   `client.replace()` moved to `client.config.fetch()`,
   `client.config.update()`, and `client.config.replace()`. The root

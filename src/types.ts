@@ -7,7 +7,8 @@ export type LogLevel =
   | 'warning'
   | 'error'
   | 'critical'
-  | 'alert';
+  | 'alert'
+  | 'emergency';
 
 export interface LogEntryInput {
   level: LogLevel;
@@ -30,6 +31,16 @@ export interface ActionUpdate {
   message: string;
   data?: Record<string, unknown> | null;
   timestamp?: string;
+}
+
+export interface FeedItem<TData = Record<string, unknown>> {
+  id: string;
+  external_id: string;
+  data: TData;
+  /** ISO8601 timestamp, or null when the item is permanent. */
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Action<TParams = Record<string, unknown>, TResult = Record<string, unknown>> {

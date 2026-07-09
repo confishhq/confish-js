@@ -2,7 +2,7 @@ import { ConflictError } from './errors.js';
 import type { HttpClient } from './http.js';
 import type { Action } from './types.js';
 
-export interface ActionUpdateInput {
+export interface ActionProgressInput {
   message: string;
   data?: Record<string, unknown>;
 }
@@ -27,8 +27,8 @@ export interface ActionConsumeOptions<TResult = Record<string, unknown>> {
 }
 
 export interface ActionContext {
-  /** Append a timeline update visible in the dashboard. */
-  update(message: string, data?: Record<string, unknown>): Promise<Action>;
+  /** Append a progress note to the action's timeline, visible in the dashboard. */
+  progress(message: string, data?: Record<string, unknown>): Promise<Action>;
   /** True once the consume() loop has been signaled to stop. */
   readonly signal: AbortSignal | undefined;
 }
@@ -58,8 +58,8 @@ export class Actions {
     });
   }
 
-  /** Append a timeline update. */
-  update(actionId: string, input: ActionUpdateInput, signal?: AbortSignal): Promise<Action> {
+  /** Append a progress note to the action's timeline. */
+  progress(actionId: string, input: ActionProgressInput, signal?: AbortSignal): Promise<Action> {
     return this.http.request<Action>({
       method: 'POST',
       path: `/c/${this.envId}/actions/${actionId}/update`,
@@ -165,8 +165,8 @@ export class Actions {
 
     const ctx: ActionContext = {
       signal,
-      update: (message, data) =>
-        this.update(action.id, data !== undefined ? { message, data } : { message }, signal),
+      progress: (message, data) =>
+        this.progress(action.id, data !== undefined ? { message, data } : { message }, signal),
     };
 
     try {

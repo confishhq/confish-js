@@ -31,30 +31,74 @@ export interface WebhookPayload {
   values?: Record<string, unknown>;
 }
 
+/** Base class for all webhook verification failures. */
+export class WebhookVerificationError extends Error {
+  constructor(message: string, options: { cause?: unknown } = {}) {
+    super(message, { cause: options.cause });
+    this.name = 'WebhookVerificationError';
+  }
+}
+
+/** The signature header is missing, malformed, or does not match the body. */
+export class WebhookSignatureError extends WebhookVerificationError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WebhookSignatureError';
+  }
+}
+
+/** The signature is valid but its timestamp is outside the tolerance window. */
+export class WebhookTimestampError extends WebhookVerificationError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WebhookTimestampError';
+  }
+}
+
 const SIGNATURE_RE = /^ts=(\d+);sig=([a-f0-9]+)$/i;
 
 /**
- * Verify an incoming webhook signature. Returns true if the signature is valid AND
- * within the tolerance window, false otherwise. Uses constant-time comparison.
+ * Verify an incoming webhook and parse its body in one operation. Resolves with the
+ * parsed payload when the signature is valid AND within the tolerance window; throws
+ * a WebhookSignatureError or WebhookTimestampError otherwise. Uses constant-time
+ * comparison.
  */
-export async function verifyWebhook(options: VerifyWebhookOptions): Promise<boolean> {
-  if (!options.signature) return false;
+export async function verifyWebhook(options: VerifyWebhookOptions): Promise<WebhookPayload> {
+  if (!options.signature) {
+    throw new WebhookSignatureError('Missing signature header');
+  }
 
   const match = SIGNATURE_RE.exec(options.signature.trim());
-  if (!match) return false;
+  if (!match) {
+    throw new WebhookSignatureError('Malformed signature header');
+  }
 
   const [, tsStr, providedSig] = match;
   const ts = Number.parseInt(tsStr!, 10);
-  if (!Number.isFinite(ts)) return false;
+  if (!Number.isFinite(ts)) {
+    throw new WebhookSignatureError('Malformed signature timestamp');
+  }
+
+  const expected = await hmacSha256Hex(options.secret, `${ts}:${options.body}`);
+  if (!constantTimeEqual(providedSig!, expected)) {
+    throw new WebhookSignatureError('Signature does not match the body');
+  }
 
   const tolerance = options.toleranceSeconds ?? 300;
   if (tolerance > 0) {
     const now = options.now ? options.now() : Math.floor(Date.now() / 1000);
-    if (Math.abs(now - ts) > tolerance) return false;
+    if (Math.abs(now - ts) > tolerance) {
+      throw new WebhookTimestampError(
+        `Signature timestamp is outside the tolerance window of ${tolerance}s`,
+      );
+    }
   }
 
-  const expected = await hmacSha256Hex(options.secret, `${ts}:${options.body}`);
-  return constantTimeEqual(providedSig!, expected);
+  try {
+    return JSON.parse(options.body) as WebhookPayload;
+  } catch (cause) {
+    throw new WebhookVerificationError('Failed to parse webhook body as JSON', { cause });
+  }
 }
 
 async function hmacSha256Hex(secret: string, message: string): Promise<string> {

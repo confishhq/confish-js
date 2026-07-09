@@ -30,7 +30,7 @@ describe('Confish client', () => {
       fetch,
     });
 
-    const config = await client.fetch();
+    const config = await client.config.fetch();
 
     expect(config.site_name).toBe('My App');
     expect(config.max_upload_mb).toBe(25);
@@ -47,7 +47,7 @@ describe('Confish client', () => {
     ]);
     const client = new Confish<MyConfig>({ envId: 'env_123', apiKey: 'k', fetch });
 
-    await client.update({ maintenance_mode: true, max_upload_mb: 50 });
+    await client.config.update({ maintenance_mode: true, max_upload_mb: 50 });
 
     expect(calls[0]!.method).toBe('PATCH');
     expect(calls[0]!.body).toEqual({ values: { maintenance_mode: true, max_upload_mb: 50 } });
@@ -57,7 +57,7 @@ describe('Confish client', () => {
     const { fetch, calls } = mockFetch([{ status: 200, body: {} }]);
     const client = new Confish<MyConfig>({ envId: 'env_123', apiKey: 'k', fetch });
 
-    await client.replace({ site_name: 'X', max_upload_mb: 1, maintenance_mode: false });
+    await client.config.replace({ site_name: 'X', max_upload_mb: 1, maintenance_mode: false });
 
     expect(calls[0]!.method).toBe('PUT');
     expect(calls[0]!.body).toEqual({
@@ -69,7 +69,7 @@ describe('Confish client', () => {
     const { fetch } = mockFetch([{ status: 401, body: { error: 'Missing API key' } }]);
     const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch });
 
-    await expect(client.fetch()).rejects.toBeInstanceOf(AuthError);
+    await expect(client.config.fetch()).rejects.toBeInstanceOf(AuthError);
   });
 
   it('throws ValidationError with field errors on 422', async () => {
@@ -84,7 +84,7 @@ describe('Confish client', () => {
     ]);
     const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch });
 
-    const err = await client.update({ x: 1 } as never).catch((e) => e);
+    const err = await client.config.update({ x: 1 } as never).catch((e) => e);
 
     expect(err).toBeInstanceOf(ValidationError);
     expect((err as ValidationError).errors).toEqual({
@@ -99,7 +99,7 @@ describe('Confish client', () => {
     ]);
     const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch, maxRetries: 1 });
 
-    const res = await client.fetch();
+    const res = await client.config.fetch();
 
     expect(res).toEqual({ site_name: 'ok' });
     expect(calls).toHaveLength(2);
@@ -111,7 +111,7 @@ describe('Confish client', () => {
     ]);
     const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch, maxRetries: 1 });
 
-    const err = await client.fetch().catch((e) => e);
+    const err = await client.config.fetch().catch((e) => e);
 
     expect(err).toBeInstanceOf(RateLimitError);
     expect((err as RateLimitError).limit).toBe(60);
@@ -124,16 +124,50 @@ describe('Confish client', () => {
     await expect(client.actions.ack('a1')).rejects.toBeInstanceOf(ConflictError);
   });
 
-  it('logs via the logger helpers', async () => {
+  it('logs via the per-level helpers', async () => {
     const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'log_1' } }]);
     const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch });
 
-    await client.logger.info('hello', { user_id: 1 });
+    await client.logs.info('hello', { user_id: 1 });
 
+    expect(calls[0]).toMatchObject({
+      url: 'https://confi.sh/c/env_123/log',
+      method: 'POST',
+    });
     expect(calls[0]!.body).toEqual({
       level: 'info',
       message: 'hello',
       context: { user_id: 1 },
+    });
+  });
+
+  it('logs at the emergency level', async () => {
+    const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'log_1' } }]);
+    const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch });
+
+    await client.logs.emergency('database unreachable');
+
+    expect(calls[0]!.body).toEqual({
+      level: 'emergency',
+      message: 'database unreachable',
+    });
+  });
+
+  it('writes a full log entry via logs.write()', async () => {
+    const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'log_1' } }]);
+    const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch });
+
+    const res = await client.logs.write({
+      level: 'warning',
+      message: 'High memory usage',
+      context: { mb: 850 },
+    });
+
+    expect(res).toEqual({ id: 'log_1' });
+    expect(calls[0]!.body).toEqual({
+      level: 'warning',
+      message: 'High memory usage',
+      context: { mb: 850 },
     });
   });
 });

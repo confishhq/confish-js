@@ -1,6 +1,8 @@
 import { Actions } from './actions.js';
+import { Config } from './config.js';
+import { Feed } from './feeds.js';
 import { HttpClient } from './http.js';
-import type { LogEntryInput, LogEntryResponse, LogLevel } from './types.js';
+import { Logs } from './logs.js';
 
 export interface ConfishOptions {
   envId: string;
@@ -14,8 +16,9 @@ export interface ConfishOptions {
 const DEFAULT_BASE_URL = 'https://confi.sh';
 
 export class Confish<T extends object = Record<string, unknown>> {
+  readonly config: Config<T>;
   readonly actions: Actions;
-  readonly logger: Logger;
+  readonly logs: Logs;
 
   private readonly http: HttpClient;
   private readonly envId: string;
@@ -33,76 +36,13 @@ export class Confish<T extends object = Record<string, unknown>> {
       maxRetries: options.maxRetries,
     });
 
+    this.config = new Config<T>(this.http, this.envId);
     this.actions = new Actions(this.http, this.envId);
-    this.logger = new Logger(this);
+    this.logs = new Logs(this.http, this.envId);
   }
 
-  /** Fetch the environment's typed configuration. */
-  fetch(signal?: AbortSignal): Promise<T> {
-    return this.http.request<T>({
-      method: 'GET',
-      path: `/c/${this.envId}`,
-      signal,
-    });
-  }
-
-  /** Partial update (PATCH). Only listed fields are changed. */
-  update(values: Partial<T>, signal?: AbortSignal): Promise<T> {
-    return this.http.request<T>({
-      method: 'PATCH',
-      path: `/c/${this.envId}`,
-      body: { values },
-      signal,
-    });
-  }
-
-  /** Replace all values (PUT). Omitted fields reset to defaults. */
-  replace(values: T, signal?: AbortSignal): Promise<T> {
-    return this.http.request<T>({
-      method: 'PUT',
-      path: `/c/${this.envId}`,
-      body: { values },
-      signal,
-    });
-  }
-
-  /** Send a log entry. */
-  log(entry: LogEntryInput, signal?: AbortSignal): Promise<LogEntryResponse> {
-    return this.http.request<LogEntryResponse>({
-      method: 'POST',
-      path: `/c/${this.envId}/log`,
-      body: entry,
-      signal,
-    });
-  }
-}
-
-export class Logger {
-  constructor(private readonly client: { log(entry: LogEntryInput): Promise<LogEntryResponse> }) {}
-
-  debug(message: string, context?: Record<string, unknown>) {
-    return this.send('debug', message, context);
-  }
-  info(message: string, context?: Record<string, unknown>) {
-    return this.send('info', message, context);
-  }
-  notice(message: string, context?: Record<string, unknown>) {
-    return this.send('notice', message, context);
-  }
-  warning(message: string, context?: Record<string, unknown>) {
-    return this.send('warning', message, context);
-  }
-  error(message: string, context?: Record<string, unknown>) {
-    return this.send('error', message, context);
-  }
-  critical(message: string, context?: Record<string, unknown>) {
-    return this.send('critical', message, context);
-  }
-  alert(message: string, context?: Record<string, unknown>) {
-    return this.send('alert', message, context);
-  }
-
-  private send(level: LogLevel, message: string, context?: Record<string, unknown>) {
-    return this.client.log(context ? { level, message, context } : { level, message });
+  /** Get a handle bound to a feed by slug. Makes no HTTP request until a method is called. */
+  feed<TData extends object = Record<string, unknown>>(slug: string): Feed<TData> {
+    return new Feed<TData>(this.http, this.envId, slug);
   }
 }

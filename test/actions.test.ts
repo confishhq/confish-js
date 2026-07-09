@@ -50,6 +50,19 @@ describe('Actions', () => {
     expect(calls[0]!.body).toEqual({});
   });
 
+  it('appends a timeline note via progress()', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: pendingAction('a1') }]);
+    const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch });
+
+    await client.actions.progress('a1', { message: 'closing 3 positions', data: { step: 2 } });
+
+    expect(calls[0]).toMatchObject({
+      url: 'https://confi.sh/c/env_123/actions/a1/update',
+      method: 'POST',
+    });
+    expect(calls[0]!.body).toEqual({ message: 'closing 3 positions', data: { step: 2 } });
+  });
+
   describe('consume()', () => {
     it('runs handler, completes successfully, then stops on abort', async () => {
       const action = pendingAction('a1', 'place_order');
@@ -157,7 +170,7 @@ describe('Actions', () => {
       expect(calls.find((c) => c.url.endsWith('/fail'))).toBeUndefined();
     });
 
-    it('exposes ctx.update() for progress reporting', async () => {
+    it('exposes ctx.progress() for progress reporting', async () => {
       const action = pendingAction('a1');
       let listCalls = 0;
       const { fetch, calls } = mockFetch((req) => {
@@ -173,7 +186,7 @@ describe('Actions', () => {
 
       const consumePromise = client.actions.consume({
         handler: async (_a, ctx) => {
-          await ctx.update('half done', { progress: 0.5 });
+          await ctx.progress('half done', { progress: 0.5 });
         },
         pollIntervalMs: 5,
         signal: ctrl.signal,

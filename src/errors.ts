@@ -31,6 +31,13 @@ export class ForbiddenError extends ConfishError {
   }
 }
 
+export class NotFoundError extends ConfishError {
+  constructor(body: unknown) {
+    super(messageFromBody(body, 'Not found'), { status: 404, body });
+    this.name = 'NotFoundError';
+  }
+}
+
 export class ValidationError extends ConfishError {
   readonly errors: Record<string, string[]>;
 
@@ -72,6 +79,7 @@ export class ServerError extends ConfishError {
 export function errorFromResponse(status: number, body: unknown, headers: Headers): ConfishError {
   if (status === 401) return new AuthError(body);
   if (status === 403) return new ForbiddenError(body);
+  if (status === 404) return new NotFoundError(body);
   if (status === 409) return new ConflictError(body);
   if (status === 422) return new ValidationError(body);
   if (status === 429) return new RateLimitError(body, headers);

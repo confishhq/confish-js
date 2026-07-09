@@ -1,10 +1,11 @@
 # @confish/sdk
 
-Official TypeScript/JavaScript SDK for [confish](https://confi.sh) — typed configuration, actions, and webhook verification.
+Official TypeScript/JavaScript SDK for [confish](https://confi.sh) — typed configuration, actions, feeds, and webhook verification.
 
 - Fully typed configuration via a generic parameter
 - Native `fetch`, no dependencies, works in Node 18+, Bun, Deno, Cloudflare Workers, Vercel Edge
 - Long-running action consumer with abort signal and idempotent skip on conflict
+- Typed feeds for pushing live items with optional TTLs
 - Webhook signature verification using Web Crypto
 
 ## Install
@@ -35,7 +36,7 @@ const client = new Confish<MyConfig>({
   apiKey: process.env.CONFISH_API_KEY!,
 });
 
-const config = await client.fetch();
+const config = await client.config.fetch();
 config.maintenance_mode; // typed as boolean
 ```
 
@@ -43,13 +44,13 @@ config.maintenance_mode; // typed as boolean
 
 ```ts
 // GET /c/{env_id}
-const config = await client.fetch();
+const config = await client.config.fetch();
 
 // PATCH — only listed fields change
-await client.update({ maintenance_mode: true });
+await client.config.update({ maintenance_mode: true });
 
 // PUT — replaces everything; omitted fields reset to defaults
-await client.replace({
+await client.config.replace({
   site_name: 'My App',
   max_upload_mb: 50,
   maintenance_mode: false,
@@ -65,14 +66,50 @@ Both `update` and `replace` return the full updated config in the same shape as 
 ## Logging
 
 ```ts
-await client.logger.info('Worker started', { region: 'eu-west-1' });
-await client.logger.error('Job failed', { job_id: 'abc', err: String(e) });
+await client.logs.info('Worker started', { region: 'eu-west-1' });
+await client.logs.error('Job failed', { job_id: 'abc', err: String(e) });
 
-// Or directly:
-await client.log({ level: 'warning', message: 'High memory usage', context: { mb: 850 } });
+// Or write a full entry:
+await client.logs.write({ level: 'warning', message: 'High memory usage', context: { mb: 850 } });
 ```
 
-Levels: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`.
+Levels: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`. Log levels follow RFC 5424 (syslog).
+
+## Feeds
+
+A feed is a live, schema-validated collection of items keyed by your own IDs. Get a handle with `client.feed(slug)` — no request is made until you call a method.
+
+```ts
+import { Confish } from '@confish/sdk';
+
+type JobItem = { url: string; priority: number };
+
+const client = new Confish({ envId: '...', apiKey: '...' });
+const jobs = client.feed<JobItem>('jobs');
+
+// Upsert: creates the item or replaces it in place. TTL is in seconds.
+await jobs.set('sitemap-crawl', { url: 'https://example.com/sitemap.xml', priority: 1 }, { ttl: 86_400 });
+
+// Live items, newest first.
+const items = await jobs.list(); // FeedItem<JobItem>[]
+
+// Idempotent — deleting a missing item succeeds.
+await jobs.delete('sitemap-crawl');
+```
+
+For sync-style cron jobs that own the whole feed, `replace` swaps in your full dataset in one request — existing IDs update in place, new IDs are created, and **anything absent is deleted** (an empty array clears the feed). All-or-nothing: if any item is invalid, nothing is written.
+
+```ts
+const result = await jobs.replace([
+  { external_id: 'sitemap-crawl', data: { url: 'https://example.com/sitemap.xml', priority: 1 }, ttl: 86_400 },
+  { external_id: 'robots-check', data: { url: 'https://example.com/robots.txt', priority: 2 } },
+]);
+result; // { created: 1, updated: 1, deleted: 3 }
+```
+
+> **TTL is declarative.** `set` is a full replace (PUT): passing `ttl` schedules expiry, and *omitting* `ttl` makes the item permanent — including clearing a TTL set by an earlier `set`. The same rule applies per item in `replace`. TTL ranges from 1 second to 30 days (2592000).
+
+Each `FeedItem` carries `id`, `external_id`, your typed `data`, `expires_at` (ISO8601 or `null` when permanent), `created_at`, and `updated_at`. An unknown feed slug throws `NotFoundError`; items that don't match the feed's schema throw `ValidationError`.
 
 ## Actions
 
@@ -91,7 +128,7 @@ await client.actions.consume({
   concurrency: 2,
   handler: async (action: Action, ctx) => {
     if (action.type === 'place_order') {
-      await ctx.update('Submitting order', { params: action.params });
+      await ctx.progress('Submitting order', { params: action.params });
       const order = await placeOrder(action.params);
       return { order_id: order.id, filled_price: order.price };
     }
@@ -116,34 +153,47 @@ You can also call the action endpoints directly:
 ```ts
 const actions = await client.actions.list();
 await client.actions.ack('action_id');
-await client.actions.update('action_id', { message: 'progress', data: { step: 2 } });
+await client.actions.progress('action_id', { message: 'closing 3 positions', data: { step: 2 } });
 await client.actions.complete('action_id', { result_field: 'value' });
 await client.actions.fail('action_id', { error: 'timeout' });
 ```
 
 ## Webhook verification
 
-Imported separately so server-only crypto stays out of edge bundles that don't need it.
+Imported separately so server-only crypto stays out of edge bundles that don't need it. Verification and parsing are one operation: on success you get the parsed payload; on failure a typed error tells you *why*.
 
 ```ts
-import { verifyWebhook } from '@confish/sdk/webhook';
+import {
+  verifyWebhook,
+  WebhookSignatureError,
+  WebhookTimestampError,
+} from '@confish/sdk/webhook';
 
 // Express:
 app.post('/webhook', express.text({ type: '*/*' }), async (req, res) => {
-  const ok = await verifyWebhook({
-    body: req.body, // raw string
-    signature: req.headers['x-confish-signature'] as string,
-    secret: process.env.CONFISH_WEBHOOK_SECRET!,
-  });
-  if (!ok) return res.status(401).send('Invalid signature');
+  let payload;
+  try {
+    payload = await verifyWebhook({
+      body: req.body, // raw string
+      signature: req.headers['x-confish-signature'] as string,
+      secret: process.env.CONFISH_WEBHOOK_SECRET!,
+    });
+  } catch (err) {
+    if (err instanceof WebhookTimestampError) {
+      return res.status(401).send('Timestamp outside tolerance');
+    }
+    if (err instanceof WebhookSignatureError) {
+      return res.status(401).send('Invalid signature');
+    }
+    throw err;
+  }
 
-  const payload = JSON.parse(req.body);
   // handle payload.event ...
   res.sendStatus(200);
 });
 ```
 
-The verifier uses constant-time comparison and rejects timestamps older than 5 minutes by default (override with `toleranceSeconds`). Always pass the **raw, unparsed body** — re-serializing parsed JSON breaks verification.
+Both errors extend `WebhookVerificationError` if you don't need to distinguish them. The verifier uses constant-time comparison and rejects timestamps older than 5 minutes by default (override with `toleranceSeconds`). Always pass the **raw, unparsed body** — re-serializing parsed JSON breaks verification.
 
 ## Errors
 
@@ -156,18 +206,21 @@ import {
   ConflictError,
   ForbiddenError,
   NetworkError,
+  NotFoundError,
   RateLimitError,
   ServerError,
   ValidationError,
 } from '@confish/sdk';
 
 try {
-  await client.fetch();
+  await client.config.fetch();
 } catch (err) {
   if (err instanceof RateLimitError) {
     console.log(`Slow down — retry after ${err.retryAfter}s`);
   } else if (err instanceof ValidationError) {
     console.log('Field errors:', err.errors);
+  } else if (err instanceof NotFoundError) {
+    console.log('Unknown resource:', err.message);
   } else if (err instanceof ConfishError) {
     console.log(`HTTP ${err.status}: ${err.message}`);
   }

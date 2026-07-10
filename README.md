@@ -1,6 +1,6 @@
 # @confish/sdk
 
-Official TypeScript/JavaScript SDK for [confish](https://confi.sh) — typed configuration, actions, feeds, and webhook verification.
+Official TypeScript/JavaScript SDK for [confish](https://confi.sh) — typed configuration, actions, logs, feeds, and webhook verification.
 
 - Fully typed configuration via a generic parameter
 - Native `fetch`, no dependencies, works in Node 20+, Bun, Deno, Cloudflare Workers, Vercel Edge

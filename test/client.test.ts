@@ -170,4 +170,51 @@ describe('Confish client', () => {
       context: { mb: 850 },
     });
   });
+
+  it('writes a batch of log entries via logs.writeBatch()', async () => {
+    const { fetch, calls } = mockFetch([{ status: 201, body: { ids: ['log_1', 'log_2'] } }]);
+    const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch });
+
+    const ids = await client.logs.writeBatch([
+      { level: 'info', message: 'Crawl started', context: { pages: 312 } },
+      { level: 'warning', message: 'Slow origin', timestamp: '2026-07-12T03:10:00Z' },
+    ]);
+
+    expect(ids).toEqual(['log_1', 'log_2']);
+    expect(calls[0]).toMatchObject({
+      url: 'https://confi.sh/c/env_123/logs',
+      method: 'POST',
+    });
+    expect(calls[0]!.body).toEqual({
+      entries: [
+        { level: 'info', message: 'Crawl started', context: { pages: 312 } },
+        { level: 'warning', message: 'Slow origin', timestamp: '2026-07-12T03:10:00Z' },
+      ],
+    });
+  });
+
+  it('rejects batches over 100 entries without making a request', async () => {
+    const { fetch, calls } = mockFetch([{ status: 201, body: { ids: [] } }]);
+    const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch });
+    const entries = Array.from({ length: 101 }, (_, i) => ({
+      level: 'info' as const,
+      message: `entry ${i}`,
+    }));
+
+    const err = await client.logs.writeBatch(entries).catch((e) => e);
+
+    expect(err).toBeInstanceOf(RangeError);
+    expect((err as RangeError).message).toBe(
+      'writeBatch accepts at most 100 entries per request, got 101',
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it('resolves an empty batch to [] without making a request', async () => {
+    const { fetch, calls } = mockFetch([{ status: 201, body: { ids: [] } }]);
+    const client = new Confish({ envId: 'env_123', apiKey: 'k', fetch });
+
+    await expect(client.logs.writeBatch([])).resolves.toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
 });

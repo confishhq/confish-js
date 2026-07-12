@@ -1,6 +1,6 @@
 {
   "name": "@confish/sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Official TypeScript/JavaScript SDK for confish — typed configuration, actions, logs, feeds, and webhook verification.",
   "license": "MIT",
   "author": "confish",

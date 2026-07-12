@@ -75,6 +75,21 @@ await client.logs.write({ level: 'warning', message: 'High memory usage', contex
 
 Levels: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`. Log levels follow RFC 5424 (syslog).
 
+When you buffer logs during a job — a crawl, a batch import, an incident replay — flush them in one request with `writeBatch`. Each entry takes an optional ISO8601 `timestamp` so entries keep the time they actually happened rather than the time you flushed:
+
+```ts
+const ids = await client.logs.writeBatch([
+  { level: 'info', message: 'Crawl started', context: { seed_urls: 12 } },
+  { level: 'warning', message: 'Slow origin', context: { url: 'https://example.com/sitemap.xml', ms: 4100 }, timestamp: '2026-07-12T03:10:41Z' },
+  { level: 'info', message: 'Crawl finished', context: { pages: 312, failed: 3 } },
+]);
+ids; // one id per entry, in order
+```
+
+Batches are capped at **100 entries** — passing more throws a `RangeError` before any request is made, so split larger buffers into chunks. An empty array resolves to `[]` without a request.
+
+Unlike the other confish SDKs, there is no logging-framework adapter here by design — the JavaScript ecosystem has no consensus logging interface — so `client.logs` is how you push logs from JS.
+
 ## Feeds
 
 A feed is a live, schema-validated collection of items keyed by your own IDs. Get a handle with `client.feed(slug)` — no request is made until you call a method.

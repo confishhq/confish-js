@@ -16,6 +16,11 @@ export interface LogEntryInput {
   context?: Record<string, unknown>;
 }
 
+export interface LogBatchEntryInput extends LogEntryInput {
+  /** ISO8601 timestamp of when the entry happened. Omit to use the server's receive time. */
+  timestamp?: string;
+}
+
 export interface LogEntryResponse {
   id: string;
 }

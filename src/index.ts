@@ -21,6 +21,7 @@ export type {
   ActionUpdate,
   ConfigValues,
   FeedItem,
+  LogBatchEntryInput,
   LogEntryInput,
   LogEntryResponse,
   LogLevel,

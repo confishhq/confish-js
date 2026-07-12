@@ -1,5 +1,19 @@
 # @confish/sdk
 
+## 0.3.0
+
+### Added
+
+- **Batch log writing.** `client.logs.writeBatch(entries, signal?)` sends
+  up to 100 entries in one request (`POST /c/{env_id}/logs`) and resolves
+  with the created entry ids in order. Each entry accepts an optional
+  ISO8601 `timestamp` for backfilling buffered logs. More than 100
+  entries throws a `RangeError` client-side without making a request; an
+  empty array resolves to `[]` without a request. New exported
+  `LogBatchEntryInput` type. Unlike the other 0.3.0 SDKs, there is no
+  logging-framework adapter — by design, as JS has no consensus logging
+  interface; `client.logs` is the JS story.
+
 ## 0.2.0
 
 ### Added

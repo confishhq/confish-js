@@ -1,5 +1,20 @@
 # @confish/sdk
 
+## Unreleased
+
+### Chore
+
+- **Dependency and CI refresh.** No change to the public API or published
+  output. Updated dev tooling: `vitest` 4 → 5, `vite` 8.1 → 8.3,
+  `@types/node` 22 → 26, `@changesets/cli` 2 → 3, and the pinned `esbuild`
+  override 0.28.1 → 0.28.2 (still ahead of the vulnerable range). Bumped
+  GitHub Actions to their current majors: `actions/checkout` v4 → v7,
+  `actions/setup-node` v4 → v7, `pnpm/action-setup` v4 → v6. `typescript`
+  stays on 5.9.3 — 7.0.2 is out but tsup 8.5.1's bundled `dts` step
+  crashes against it (`Cannot read properties of undefined (reading
+  'useCaseSensitiveFileNames')`), so the major is held back until tsup
+  ships a compatible build.
+
 ## 0.3.0
 
 ### Added
